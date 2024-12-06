@@ -1,0 +1,207 @@
+/***************************************************
+ LLAMADOR DE ENTRADA V1.0.
+ llamadores version V1.1.0 edit
+ <https://www.clonewarsinc.com/llamadoresentrada.html>
+ 
+ ***************************************************
+This was created by TEcexttreme84 Created 2024-14-06
+                            Re-code 2024 - 17-09
+                            clone version of teknova (paid Version)
+ 
+ 
+ GNU Lesser General Public License.
+ See <http://www.gnu.org/licenses/> for details.
+ All above must be included in any redistribution
+ ****************************************************/
+
+#include "Arduino.h"
+#include "SoftwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
+
+//attiny85 pin defenition
+const byte dfPlayerTxpin = 0; // TRANSMIT TO DFPLAYER 
+const byte dfPlayerRxpin = 2; // RECIEVE FROM DFPLAYER
+const byte pttInPin = 1; // PTT IN (ACTIVE LOW )
+const byte pttOutPin = 3; // PTT OUTPUT (ACTIVE HIGH)
+const byte ledOutPin = 4; // PTT OUTPUT INDICATOR (ACTIVE HIGH)
+const byte busyInPin = 5; //DFPLAYER BUSY PIN (ACTIVE LOW )
+
+SoftwareSerial dfPlayer(dfPlayerRxpin, dfPlayerTxpin);
+
+void setup(){
+  dfPlayer.begin(9600); // 9600 BAUD TO DFPLAYER
+  pinMode(pttInPin, INPUT);
+
+  digitalWrite(pttOutPin, LOW);
+  pinMode(pttOutPin, OUTPUT);
+
+  digitalWrite(ledOutPin, LOW);
+  pinMode(ledOutPin, OUTPUT);
+
+  pinMode(busyInPin, INPUT);
+
+  // SIGNAL PROGRAM STARTUP TO USER - FLASH LED 3 TIMES 
+  for( byte i=0; i<3; ++i){
+    digitalWrite(ledOutPin, HIGH);
+    delay(250);
+    digitalWrite(ledOutPin, LOW);
+    delay(250);
+  }
+}
+
+void loop() {
+  static uint16_t trackNum = 1; //CURRENTLY SELECTED TRACK NUMBER TO PLAY 
+
+// PTT_IN PRESSED, AND WE'RE NOT ALREADY PLAYING A TRACK?
+if ( pttInWentLow()){
+  // key the repeater
+  digitalWrite(pttOutPin, HIGH);
+  digitalWrite(ledOutPin, HIGH);
+  // PLAY THE CURRENTLY SELECT TRACK 
+  playTrack(trackNum);
+}
+// FINISH PLAYING?
+if ( digitalRead(busyInPin) == HIGH){
+  //UNKEY REPEATER
+  digitalWrite(pttOutPin, LOW);
+  digitalWrite(ledOutPin, LOW);
+}
+// CHECK FOR DFPLAYER RESPONSE
+checkResponse(trackNum);
+}
+// RETURN TRUE WHENEVER DEBOUND PTT_IN GOES LOW 
+bool pttInWentLow(){
+  bool currentPttInState; // HIGH/TRUE FOR INACTIVE , LOW/ FALSE FOR ACTIVE.
+  static bool lastPttInState = HIGH;
+  static bool pttInState = HIGH;
+  static unsigned long pttInDebounceTimeout = 0;
+  const unsigned pttInDebounceDelay = 20;
+  bool result = false;
+
+  currentPttInState = digitalRead(pttInPin);
+
+  if (currentPttInState ! = lastPttInState){
+    pttInDebounceTimeout = millis() + pttInDebounceDelay;
+  } 
+
+  if ( pttInDebounceTimeout && millis() > pttInDebounceTimeout){
+    if(currentPttInState != pttInState){
+      pttInState = currentPttInState;
+      // PTTInWenLOw IS TRYE WHEN PTT_IN ISNLOW AND DEBOUNCE 
+      result = pttInState == LOW;
+    }
+    pttInDebounceTimeout = 0;
+  }
+  lastPttInState = currentPttInState;
+  return result;
+}
+
+// PLAY A TRACK ON DFPLAYER
+// GIVEN A TRACK NUMBER, CREATE A DFPLAYER COMMAND BLOCK AND SEND IT
+
+void playTrack(unsigned n ){
+  static char playTrackCmd[] = {
+    '\x7E', '\xFF','\x06', '\x03','\x00','\x00','\x00','\x01','\xFF','\xE6','\xEF'
+  };
+  unsigned long busyTimeout;
+
+  // INSERT THE 2 BYTE TRACK NUMBER IN THE APPROPIATED SPOT 
+  playTrackCmd[5] = n >> 8;
+  playTrackCmd[6] = n & 0xFF;
+
+  int16_t checksum = 0;
+  for( int i=1; i<7; ++i){
+    checksum += (byte)playTrackCmd[i];
+  }
+  checksum = checksum;
+  playTrackCmd[7] = checksum >>8;
+  playTrackCmd[8] = checksum & 0xFF;
+
+  dfPlayer.write(playTrackCmd,sizeof playTrackCmd);
+
+  busyTimeout = millis() + 750;
+  while (millis() < busyTimeout){
+    if(digitalRead(busyInPin) == LOW){
+      break;
+    }
+  }
+}
+enum{
+  START, VER,LEN,CMD,FEEDBACK,PARA_HI,PARA_LOW,CHECK_HI, CHECK_LO, END
+} rxState = START;
+
+void checkResponse(uint16_t &trackNum){
+  static int16_t checkSum,bytesSum;
+  static uint16_t newTrackNum;
+
+
+  while( dfPlayer.available() ){
+    byte b = dfPlayer.read();
+    switch( rxState ){
+      
+      case START:
+      if(b == 0x7E){
+        rxState = VER;
+      }
+      break;
+
+      case VER:
+      if(b == 0xFF){
+        rxState = LEN;
+        bytesSum = b;
+      } else {
+        rxState = START;
+      }
+      break;
+
+      case LEN:
+      if (b == 0x06){
+        rxState = CMD;
+        bytesSum += b;
+      } else {
+        rxState = START;
+      }
+      break;
+      case CMD:
+      if (b == 0X3D){
+        rxState = FEEDBACK;
+        bytesSum += b;
+      } else {
+        rxState = START;
+      }
+      break;
+
+      case FEEDBACK:
+      rxState = PARA_HI;
+      bytesSum += b;
+      break;
+
+      case PARA_HI:
+      newTrackNum = b << 8;
+      rxState = PARA_LOW;
+      bytesSum += b;
+      break;
+
+      case PARA_LOW:
+      newTrackNum |= b;
+      rxState = CHECK_HI;
+      bytesSum += b;
+      break;
+
+      case CHECK_HI:
+      checkSum = b << 8;
+      rxState = END;
+      break;
+
+      case END:
+      if(b == 0xEF){
+        if( checkSum + bytesSum == 0){
+          trackNum = newTrackNum;
+        }
+      }
+      rxState = START;
+      break;
+
+    }
+  }
+}
