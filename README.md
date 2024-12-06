@@ -36,5 +36,7 @@ Requerimientos
 
 4.) Memoria MicroSD de 8gb, 16gb, 32gb
 
+5.) Equipos necesarios para Soldar
+
 https://github.com/novatin47/mini-roger-beep-mp3/raw/main/diagrama_conexion.png
-5.) Equipos necesarios para r
+
