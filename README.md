@@ -9,3 +9,32 @@ Donacion
 
 ¡Apoya nuestra causa con tu donación! Tu contribución nos ayuda a seguir adelante y marcar la diferencia. ¡Gracias por tu generosidad!
 
+Funciona con cualquier MicroSD
+Con los formatos de audio mas usados: wav y mp3
+Soporta desde 1 hasta 255 tonos (archivos de sonido)
+Sistema de grabacion
+
+Como cualquier memoria USB puedes
+
+Eliminar
+Agregar
+Editar
+Reemplazar
+Sin software especial
+Formatos de audio
+
+Soporta Wav y mp3
+Tiempo minimo de 1 segundo
+Tiempo maximo, sin limites
+Requerimientos
+
+1.) Conocimientos basicos de electronica
+
+2.) Conocimientos basicos de computacion
+
+3.) Experiencia de trabajo con radios cb
+
+4.) Memoria MicroSD de 8gb, 16gb, 32gb
+
+https://github.com/novatin47/mini-roger-beep-mp3/raw/main/diagrama_conexion.png
+5.) Equipos necesarios para r
